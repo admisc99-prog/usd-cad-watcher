@@ -4,9 +4,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  check-rate:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test watcher
-        run: echo "USD/CAD Watcher is alive!"
+      - name: Get USD CAD rate
+        env:
+          API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          import urllib.request
+          import json
+
+          api_key = os.environ["API_KEY"]
+          url = f"https://api.twelvedata.com/price?symbol=USD/CAD&apikey={api_key}"
+
+          with urllib.request.urlopen(url) as response:
+              data = json.load(response)
+
+          if "price" not in data:
+              raise Exception(f"API error: {data}")
+
+          rate = float(data["price"])
+          print(f"USD/CAD market rate: {rate:.5f}")
+          PY
