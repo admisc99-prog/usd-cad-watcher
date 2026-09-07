@@ -1,0 +1,12 @@
+name: USD CAD Watcher
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Test watcher
+        run: echo "USD/CAD Watcher is alive!"
