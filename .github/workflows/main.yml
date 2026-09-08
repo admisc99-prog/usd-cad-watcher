@@ -36,7 +36,7 @@ jobs:
           message = f"USD/CAD market rate: {rate:.5f}"
 
           request = urllib.request.Request(
-              f"https://ntfy.sh/{ntfy_topic}",
+              f"https://{ntfy_topic}",
               data=message.encode("utf-8"),
               method="POST"
           )
