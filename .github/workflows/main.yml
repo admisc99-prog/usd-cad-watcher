@@ -2,6 +2,11 @@ name: USD CAD Watcher
 
 on:
   workflow_dispatch:
+    inputs:
+      test_rate:
+        description: "Test USD/CAD rate (leave blank for live rate)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
