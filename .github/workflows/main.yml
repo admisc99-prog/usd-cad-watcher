@@ -36,6 +36,7 @@ jobs:
           test_rate = os.environ.get("TEST_RATE", "").strip()
 
           BASELINE = 1.3800
+          SECOND_CHANCE_LEVEL = 1.4000
 
           LOWER_LEVELS = [1.34, 1.32, 1.29, 1.25, 1.20]
 
@@ -66,7 +67,8 @@ jobs:
                   "previous_rate": None,
                   "last_lower_level": None,
                   "parity_alerted": False,
-                  "below_parity_alerted": False
+                  "below_parity_alerted": False,
+                  "second_chance_active": False
               }
 
           previous_rate = state.get("previous_rate")
@@ -75,10 +77,18 @@ jobs:
           message = None
           priority = "default"
 
-          # Reset special alerts if USD/CAD moves back above parity
+          # Make sure older state files get the new field
+          if "second_chance_active" not in state:
+              state["second_chance_active"] = False
+
+          # Reset special parity alerts if USD/CAD moves back above parity
           if rate > 1.0000:
               state["parity_alerted"] = False
               state["below_parity_alerted"] = False
+
+          # Remember that USD/CAD has reached a significantly expensive level.
+          if rate >= SECOND_CHANCE_LEVEL:
+              state["second_chance_active"] = True
 
           # PARITY
           if (
@@ -111,6 +121,22 @@ jobs:
               )
               priority = "max"
               state["below_parity_alerted"] = True
+
+          # SECOND CHANCE
+          elif (
+              state.get("second_chance_active", False)
+              and previous_rate is not None
+              and previous_rate > BASELINE
+              and rate <= BASELINE
+          ):
+              title = "SECOND CHANCE"
+              message = (
+                  f"USD/CAD has fallen back to {rate:.4f}.\n\n"
+                  f"The rate previously reached {SECOND_CHANCE_LEVEL:.2f} or higher.\n"
+                  "You now have another opportunity around your 1.38 baseline."
+              )
+              priority = "high"
+              state["second_chance_active"] = False
 
           # RETURN TO BASELINE
           elif (
