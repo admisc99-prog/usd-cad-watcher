@@ -87,7 +87,7 @@ jobs:
               and rate <= 1.0000
               and not state.get("parity_alerted", False)
           ):
-              title = "⚖️ PARITY / HISTORICAL SLAM RATE"
+              title = "PARITY / HISTORICAL SLAM RATE"
               message = (
                   f"USD/CAD has reached {rate:.4f}.\n\n"
                   "USD/CAD has reached parity with the Canadian dollar.\n"
@@ -103,7 +103,7 @@ jobs:
               and rate < 1.0000
               and not state.get("below_parity_alerted", False)
           ):
-              title = "🚨 BELOW PARITY"
+              title = "BELOW PARITY"
               message = (
                   f"USD/CAD has fallen BELOW 1.0000.\n\n"
                   f"Current rate: {rate:.4f}\n\n"
@@ -118,7 +118,7 @@ jobs:
               and previous_rate > BASELINE
               and rate <= BASELINE
           ):
-              title = "🔔 BACK TO BASELINE"
+              title = "BACK TO BASELINE"
               message = (
                   f"USD/CAD has returned to your 1.38 baseline.\n\n"
                   f"Current rate: {rate:.4f}"
@@ -138,7 +138,7 @@ jobs:
                       break
 
               if crossed_level is not None:
-                  title = f"🟢 SIGNIFICANT MOVE — {crossed_level:.2f}"
+                  title = f"SIGNIFICANT MOVE - {crossed_level:.2f}"
                   message = (
                       f"USD/CAD has reached {rate:.4f}.\n\n"
                       f"This has crossed your significant {crossed_level:.2f} milestone."
