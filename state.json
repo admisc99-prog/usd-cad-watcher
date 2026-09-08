@@ -1,6 +1,7 @@
 {
-  "previous_rate": 1.38,
+  "previous_rate": 1.4,
   "last_lower_level": null,
   "parity_alerted": false,
-  "below_parity_alerted": false
+  "below_parity_alerted": false,
+  "second_chance_active": true
 }
