@@ -35,13 +35,11 @@ jobs:
           ntfy_topic = os.environ["NTFY_TOPIC"]
           test_rate = os.environ.get("TEST_RATE", "").strip()
 
-          # Your fixed personal baseline
           BASELINE = 1.3800
 
-          # Significant lower milestones
           LOWER_LEVELS = [1.34, 1.32, 1.29, 1.25, 1.20]
 
-          # Get current market rate, or use the test rate if provided
+          # Get the rate
           if test_rate:
               rate = float(test_rate)
               print(f"TEST MODE: using simulated rate {rate:.5f}")
@@ -77,19 +75,12 @@ jobs:
           message = None
           priority = "default"
 
-          # -------------------------------------------------
-          # RESET SPECIAL ALERTS WHEN RATE RETURNS ABOVE PARITY
-          # -------------------------------------------------
-
+          # Reset special alerts if USD/CAD moves back above parity
           if rate > 1.0000:
               state["parity_alerted"] = False
               state["below_parity_alerted"] = False
 
-          # -------------------------------------------------
-          # SPECIAL PARITY / BELOW-PARITY ALERTS
-          # -------------------------------------------------
-
-          # Crossing down to parity
+          # PARITY
           if (
               previous_rate is not None
               and previous_rate > 1.0000
@@ -105,7 +96,7 @@ jobs:
               priority = "max"
               state["parity_alerted"] = True
 
-          # Crossing below parity
+          # BELOW PARITY
           elif (
               previous_rate is not None
               and previous_rate >= 1.0000
@@ -121,10 +112,7 @@ jobs:
               priority = "max"
               state["below_parity_alerted"] = True
 
-          # -------------------------------------------------
-          # RETURN TO YOUR 1.38 BASELINE
-          # -------------------------------------------------
-
+          # RETURN TO BASELINE
           elif (
               previous_rate is not None
               and previous_rate > BASELINE
@@ -137,14 +125,10 @@ jobs:
               )
               priority = "high"
 
-          # -------------------------------------------------
-          # LOWER SIGNIFICANT MILESTONES
-          # -------------------------------------------------
-
+          # LOWER MILESTONES
           elif rate < BASELINE:
               last_lower_level = state.get("last_lower_level")
 
-              # Find the deepest milestone reached
               crossed_level = None
 
               for level in sorted(LOWER_LEVELS, reverse=True):
@@ -162,10 +146,7 @@ jobs:
                   priority = "high"
                   state["last_lower_level"] = crossed_level
 
-          # -------------------------------------------------
-          # RESET LOWER MILESTONE TRACKING IF BACK ABOVE BASELINE
-          # -------------------------------------------------
-
+          # Reset lower milestone tracking when back at or above baseline
           if rate >= BASELINE:
               state["last_lower_level"] = None
 
@@ -174,10 +155,7 @@ jobs:
 
           state_file.write_text(json.dumps(state, indent=2))
 
-          # -------------------------------------------------
-          # SEND NOTIFICATION ONLY WHEN SOMETHING MATTERS
-          # -------------------------------------------------
-
+          # Send notification if needed
           if title:
               print(f"Sending notification: {title}")
 
