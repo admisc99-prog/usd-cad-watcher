@@ -32,6 +32,7 @@ jobs:
 
           api_key = os.environ["API_KEY"]
           ntfy_topic = os.environ["NTFY_TOPIC"]
+          test_rate = os.environ.get("TEST_RATE", "").strip()
 
           # Your fixed personal baseline
           BASELINE = 1.3800
