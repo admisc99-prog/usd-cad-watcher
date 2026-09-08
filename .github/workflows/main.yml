@@ -129,22 +129,27 @@ jobs:
           elif rate < BASELINE:
               last_lower_level = state.get("last_lower_level")
 
-              crossed_level = None
+              # Find the deepest milestone reached by the current rate.
+              reached_levels = [level for level in LOWER_LEVELS if rate <= level]
 
-              for level in sorted(LOWER_LEVELS, reverse=True):
-                  if rate <= level:
-                      if last_lower_level is None or level < last_lower_level:
-                          crossed_level = level
-                      break
+              if reached_levels:
+                  deepest_level = min(reached_levels)
 
-              if crossed_level is not None:
-                  title = f"SIGNIFICANT MOVE - {crossed_level:.2f}"
-                  message = (
-                      f"USD/CAD has reached {rate:.4f}.\n\n"
-                      f"This has crossed your significant {crossed_level:.2f} milestone."
-                  )
-                  priority = "high"
-                  state["last_lower_level"] = crossed_level
+                  if last_lower_level is None:
+                      crossed_level = deepest_level
+                  elif deepest_level < last_lower_level:
+                      crossed_level = deepest_level
+                  else:
+                      crossed_level = None
+
+                  if crossed_level is not None:
+                      title = f"SIGNIFICANT MOVE - {crossed_level:.2f}"
+                      message = (
+                          f"USD/CAD has reached {rate:.4f}.\n\n"
+                          f"This has crossed your significant {crossed_level:.2f} milestone."
+                      )
+                      priority = "high"
+                      state["last_lower_level"] = crossed_level
 
           # Reset lower milestone tracking when back at or above baseline
           if rate >= BASELINE:
