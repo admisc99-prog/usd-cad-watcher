@@ -41,16 +41,20 @@ jobs:
           # Significant lower milestones
           LOWER_LEVELS = [1.34, 1.32, 1.29, 1.25, 1.20]
 
-          # Get current market rate
-          url = f"https://api.twelvedata.com/price?symbol=USD/CAD&apikey={api_key}"
+          # Get current market rate, or use the test rate if provided
+          if test_rate:
+              rate = float(test_rate)
+              print(f"TEST MODE: using simulated rate {rate:.5f}")
+          else:
+              url = f"https://api.twelvedata.com/price?symbol=USD/CAD&apikey={api_key}"
 
-          with urllib.request.urlopen(url) as response:
-              data = json.load(response)
+              with urllib.request.urlopen(url) as response:
+                  data = json.load(response)
 
-          if "price" not in data:
-              raise Exception(f"API error: {data}")
+              if "price" not in data:
+                  raise Exception(f"API error: {data}")
 
-          rate = float(data["price"])
+              rate = float(data["price"])
 
           print(f"USD/CAD market rate: {rate:.5f}")
 
@@ -74,11 +78,24 @@ jobs:
           priority = "default"
 
           # -------------------------------------------------
-          # SPECIAL HISTORICAL ALERTS
+          # RESET SPECIAL ALERTS WHEN RATE RETURNS ABOVE PARITY
           # -------------------------------------------------
 
-          # Exactly 1.0000 or lower
-          if rate <= 1.0000 and not state.get("parity_alerted", False):
+          if rate > 1.0000:
+              state["parity_alerted"] = False
+              state["below_parity_alerted"] = False
+
+          # -------------------------------------------------
+          # SPECIAL PARITY / BELOW-PARITY ALERTS
+          # -------------------------------------------------
+
+          # Crossing down to parity
+          if (
+              previous_rate is not None
+              and previous_rate > 1.0000
+              and rate <= 1.0000
+              and not state.get("parity_alerted", False)
+          ):
               title = "⚖️ PARITY / HISTORICAL SLAM RATE"
               message = (
                   f"USD/CAD has reached {rate:.4f}.\n\n"
@@ -88,8 +105,13 @@ jobs:
               priority = "max"
               state["parity_alerted"] = True
 
-          # Below 1.0000
-          elif rate < 1.0000 and not state.get("below_parity_alerted", False):
+          # Crossing below parity
+          elif (
+              previous_rate is not None
+              and previous_rate >= 1.0000
+              and rate < 1.0000
+              and not state.get("below_parity_alerted", False)
+          ):
               title = "🚨 BELOW PARITY"
               message = (
                   f"USD/CAD has fallen BELOW 1.0000.\n\n"
@@ -100,7 +122,7 @@ jobs:
               state["below_parity_alerted"] = True
 
           # -------------------------------------------------
-          # RETURN TO YOUR BASELINE
+          # RETURN TO YOUR 1.38 BASELINE
           # -------------------------------------------------
 
           elif (
@@ -119,27 +141,43 @@ jobs:
           # LOWER SIGNIFICANT MILESTONES
           # -------------------------------------------------
 
-          else:
+          elif rate < BASELINE:
               last_lower_level = state.get("last_lower_level")
 
-              for level in LOWER_LEVELS:
+              # Find the deepest milestone reached
+              crossed_level = None
+
+              for level in sorted(LOWER_LEVELS, reverse=True):
                   if rate <= level:
                       if last_lower_level is None or level < last_lower_level:
-                          title = f"🟢 SIGNIFICANT MOVE — {level:.2f}"
-                          message = (
-                              f"USD/CAD has reached {rate:.4f}.\n\n"
-                              f"This has crossed your significant {level:.2f} milestone."
-                          )
-                          priority = "high"
-                          state["last_lower_level"] = level
-                          break
+                          crossed_level = level
+                      break
+
+              if crossed_level is not None:
+                  title = f"🟢 SIGNIFICANT MOVE — {crossed_level:.2f}"
+                  message = (
+                      f"USD/CAD has reached {rate:.4f}.\n\n"
+                      f"This has crossed your significant {crossed_level:.2f} milestone."
+                  )
+                  priority = "high"
+                  state["last_lower_level"] = crossed_level
+
+          # -------------------------------------------------
+          # RESET LOWER MILESTONE TRACKING IF BACK ABOVE BASELINE
+          # -------------------------------------------------
+
+          if rate >= BASELINE:
+              state["last_lower_level"] = None
 
           # Save current rate
           state["previous_rate"] = rate
 
           state_file.write_text(json.dumps(state, indent=2))
 
-          # Send notification only when something meaningful happened
+          # -------------------------------------------------
+          # SEND NOTIFICATION ONLY WHEN SOMETHING MATTERS
+          # -------------------------------------------------
+
           if title:
               print(f"Sending notification: {title}")
 
