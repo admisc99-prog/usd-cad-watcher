@@ -3,12 +3,18 @@ name: USD CAD Watcher
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   check-rate:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get USD CAD rate
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check USD/CAD rate
         env:
           API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
@@ -17,10 +23,18 @@ jobs:
           import os
           import urllib.request
           import json
+          from pathlib import Path
 
           api_key = os.environ["API_KEY"]
           ntfy_topic = os.environ["NTFY_TOPIC"]
 
+          # Your fixed personal baseline
+          BASELINE = 1.3800
+
+          # Significant lower milestones
+          LOWER_LEVELS = [1.34, 1.32, 1.29, 1.25, 1.20]
+
+          # Get current market rate
           url = f"https://api.twelvedata.com/price?symbol=USD/CAD&apikey={api_key}"
 
           with urllib.request.urlopen(url) as response:
@@ -33,14 +47,118 @@ jobs:
 
           print(f"USD/CAD market rate: {rate:.5f}")
 
-          message = f"USD/CAD market rate: {rate:.5f}"
+          # Load previous state
+          state_file = Path("state.json")
 
-          request = urllib.request.Request(
-              f"https://{ntfy_topic}",
-              data=message.encode("utf-8"),
-              method="POST"
-          )
+          if state_file.exists():
+              state = json.loads(state_file.read_text())
+          else:
+              state = {
+                  "previous_rate": None,
+                  "last_lower_level": None,
+                  "parity_alerted": False,
+                  "below_parity_alerted": False
+              }
 
-          urllib.request.urlopen(request)
-          print("iPhone notification sent!")
+          previous_rate = state.get("previous_rate")
+
+          title = None
+          message = None
+          priority = "default"
+
+          # -------------------------------------------------
+          # SPECIAL HISTORICAL ALERTS
+          # -------------------------------------------------
+
+          # Exactly 1.0000 or lower
+          if rate <= 1.0000 and not state.get("parity_alerted", False):
+              title = "⚖️ PARITY / HISTORICAL SLAM RATE"
+              message = (
+                  f"USD/CAD has reached {rate:.4f}.\n\n"
+                  "USD/CAD has reached parity with the Canadian dollar.\n"
+                  "This is an extraordinary historical rate."
+              )
+              priority = "max"
+              state["parity_alerted"] = True
+
+          # Below 1.0000
+          elif rate < 1.0000 and not state.get("below_parity_alerted", False):
+              title = "🚨 BELOW PARITY"
+              message = (
+                  f"USD/CAD has fallen BELOW 1.0000.\n\n"
+                  f"Current rate: {rate:.4f}\n\n"
+                  "The Canadian dollar is now worth more than the U.S. dollar."
+              )
+              priority = "max"
+              state["below_parity_alerted"] = True
+
+          # -------------------------------------------------
+          # RETURN TO YOUR BASELINE
+          # -------------------------------------------------
+
+          elif (
+              previous_rate is not None
+              and previous_rate > BASELINE
+              and rate <= BASELINE
+          ):
+              title = "🔔 BACK TO BASELINE"
+              message = (
+                  f"USD/CAD has returned to your 1.38 baseline.\n\n"
+                  f"Current rate: {rate:.4f}"
+              )
+              priority = "high"
+
+          # -------------------------------------------------
+          # LOWER SIGNIFICANT MILESTONES
+          # -------------------------------------------------
+
+          else:
+              last_lower_level = state.get("last_lower_level")
+
+              for level in LOWER_LEVELS:
+                  if rate <= level:
+                      if last_lower_level is None or level < last_lower_level:
+                          title = f"🟢 SIGNIFICANT MOVE — {level:.2f}"
+                          message = (
+                              f"USD/CAD has reached {rate:.4f}.\n\n"
+                              f"This has crossed your significant {level:.2f} milestone."
+                          )
+                          priority = "high"
+                          state["last_lower_level"] = level
+                          break
+
+          # Save current rate
+          state["previous_rate"] = rate
+
+          state_file.write_text(json.dumps(state, indent=2))
+
+          # Send notification only when something meaningful happened
+          if title:
+              print(f"Sending notification: {title}")
+
+              request = urllib.request.Request(
+                  f"https://{ntfy_topic}",
+                  data=message.encode("utf-8"),
+                  method="POST",
+                  headers={
+                      "Title": title,
+                      "Priority": priority,
+                      "Tags": "chart_with_downwards_trend"
+                  }
+              )
+
+              urllib.request.urlopen(request)
+
+              print("Notification sent!")
+          else:
+              print("No significant notification needed.")
+
           PY
+
+      - name: Save watcher state
+        run: |
+          git config user.name "USD CAD Watcher"
+          git config user.email "actions@github.com"
+          git add state.json
+          git diff --cached --quiet || git commit -m "Update USD/CAD watcher state"
+          git push
